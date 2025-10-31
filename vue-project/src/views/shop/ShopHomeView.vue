@@ -47,6 +47,10 @@
             <el-icon><DocumentCopy /></el-icon>
             <span>订单管理</span>
           </el-menu-item>
+          <el-menu-item index="reviews">
+            <el-icon><ChatDotRound /></el-icon>
+            <span>评价互动</span>
+          </el-menu-item>
           <el-menu-item index="services">
             <el-icon><Setting /></el-icon>
             <span>服务项目</span>
@@ -69,6 +73,9 @@
         <!-- 订单管理 -->
         <ShopOrders v-if="activeMenu === 'orders'" />
 
+        <!-- 评价互动 -->
+        <ShopReviews v-if="activeMenu === 'reviews'" />
+
         <!-- 服务项目 -->
         <ShopServices v-if="activeMenu === 'services'" />
 
@@ -83,14 +90,21 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { 
-  Shop, UserFilled, DataAnalysis, DocumentCopy, Setting, Calendar
+import {
+  Shop,
+  UserFilled,
+  DataAnalysis,
+  DocumentCopy,
+  Setting,
+  Calendar,
+  ChatDotRound
 } from '@element-plus/icons-vue'
 import ShopDashboard from '@/components/shop/ShopDashboard.vue'
 import ShopAppointments from '@/views/shop/ShopAppointmentsView.vue'
 import ShopOrders from '@/components/shop/ShopOrders.vue'
 import ShopServices from '@/components/shop/ShopServices.vue'
 import ShopInfo from '@/components/shop/ShopInfo.vue'
+import ShopReviews from '@/components/shop/ShopReviews.vue'
 
 const router = useRouter()
 

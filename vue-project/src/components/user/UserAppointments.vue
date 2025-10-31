@@ -60,13 +60,22 @@
             >
               取消
             </el-button>
-            <el-button 
+            <el-button
               v-if="row.status === 'completed' && !row.reviewed"
-              size="small" 
+              size="small"
               type="warning"
               @click="reviewAppointment(row)"
             >
               评价
+            </el-button>
+            <el-button
+              v-else-if="row.status === 'completed' && row.reviewed"
+              size="small"
+              type="primary"
+              plain
+              @click="viewReview(row)"
+            >
+              查看评价
             </el-button>
           </template>
         </el-table-column>
@@ -156,6 +165,64 @@
       }"
       @success="handleReviewSuccess"
     />
+
+    <el-dialog
+      v-model="showReviewDetailDialog"
+      title="评价详情"
+      width="520px"
+      destroy-on-close
+    >
+      <div v-if="currentReview" class="review-detail">
+        <div class="review-detail__header">
+          <div class="review-detail__info">
+            <h4>{{ currentReview.serviceItemName || selectedAppointmentForReview?.serviceName }}</h4>
+            <p class="review-detail__order">
+              预约单号：{{ currentReview.orderNo || selectedAppointmentForReview?.orderNo || '未获取' }}
+            </p>
+          </div>
+          <div class="review-detail__score">
+            <el-rate :model-value="currentReview.score" disabled show-score />
+            <span class="review-detail__time">{{ currentReview.createTime }}</span>
+          </div>
+        </div>
+
+        <div class="review-detail__content">
+          <p class="review-detail__text">{{ currentReview.content || '暂无评价内容' }}</p>
+          <div v-if="currentReview.imgList.length" class="review-detail__images">
+            <el-image
+              v-for="(img, index) in currentReview.imgList"
+              :key="index"
+              :src="img"
+              :preview-src-list="currentReview.imgList"
+              fit="cover"
+              class="review-detail__image"
+            />
+          </div>
+        </div>
+
+        <div class="review-detail__scores">
+          <div v-if="currentReview.serviceScore !== null" class="review-detail__score-item">
+            服务评分：<el-rate :model-value="currentReview.serviceScore" disabled />
+          </div>
+          <div v-if="currentReview.qualityScore !== null" class="review-detail__score-item">
+            质量评分：<el-rate :model-value="currentReview.qualityScore" disabled />
+          </div>
+          <div v-if="currentReview.attitudeScore !== null" class="review-detail__score-item">
+            态度评分：<el-rate :model-value="currentReview.attitudeScore" disabled />
+          </div>
+        </div>
+
+        <div v-if="currentReview.replyContent" class="review-detail__reply">
+          <div class="review-detail__reply-label">商家回复</div>
+          <p class="review-detail__reply-text">{{ currentReview.replyContent }}</p>
+          <span class="review-detail__reply-time">{{ currentReview.replyTime }}</span>
+        </div>
+      </div>
+
+      <template #footer>
+        <el-button @click="showReviewDetailDialog = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -166,6 +233,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import { getUserAppointments, cancelAppointment as cancelAppointmentApi } from '@/api/appointment'
 import { getReviewByAppointmentId } from '@/api/review'
+import { mapReviewResponse, type ReviewItem } from '@/utils/review'
 import ReviewDialog from './ReviewDialog.vue'
 
 const router = useRouter()
@@ -179,6 +247,8 @@ const showDetailDialog = ref(false)
 const showCreateDialog = ref(false)
 const showReviewDialog = ref(false)
 const selectedAppointmentForReview = ref<any>(null)
+const showReviewDetailDialog = ref(false)
+const currentReview = ref<ReviewItem | null>(null)
 
 // 分页
 const currentPage = ref(1)
@@ -303,6 +373,33 @@ const reviewAppointment = (appointment: any) => {
   showReviewDialog.value = true
 }
 
+const viewReview = async (appointment: any) => {
+  if (!appointment?.id) return
+
+  try {
+    selectedAppointmentForReview.value = appointment
+    if (appointment.review) {
+      currentReview.value = appointment.review
+      showReviewDetailDialog.value = true
+      return
+    }
+
+    const response = await getReviewByAppointmentId(appointment.id)
+    if (response.code === 200 && response.data) {
+      const reviewData = mapReviewResponse(response.data)
+      appointment.review = reviewData
+      appointment.reviewed = true
+      currentReview.value = reviewData
+      showReviewDetailDialog.value = true
+    } else {
+      ElMessage.warning(response.msg || '暂未查询到评价信息')
+    }
+  } catch (error: any) {
+    console.error('获取评价详情失败：', error)
+    ElMessage.error(error.message || '获取评价详情失败')
+  }
+}
+
 // 评价成功回调
 const handleReviewSuccess = () => {
   console.log('✅ 评价成功，重新加载预约列表')
@@ -331,6 +428,8 @@ const handleCurrentChange = (val: number) => {
 const loadAppointments = async () => {
   loading.value = true
   try {
+    currentReview.value = null
+    showReviewDetailDialog.value = false
     const response = await getUserAppointments({
       pageNum: currentPage.value,
       pageSize: pageSize.value,
@@ -345,17 +444,20 @@ const loadAppointments = async () => {
       const appointmentsWithReviewStatus = await Promise.all(
         records.map(async (item: any) => {
           let reviewed = false
-          
-          // 如果是已完成状态，检查是否已评价
+          let reviewData: ReviewItem | null = null
+
           if (item.status === 3) {
             try {
               const reviewResponse = await getReviewByAppointmentId(item.id)
-              reviewed = !!(reviewResponse.code === 200 && reviewResponse.data)
+              if (reviewResponse.code === 200 && reviewResponse.data) {
+                reviewData = mapReviewResponse(reviewResponse.data)
+                reviewed = true
+              }
             } catch (error) {
               console.log(`预约 ${item.id} 暂无评价`)
             }
           }
-          
+
           return {
             id: item.id,
             orderNo: item.orderNo,
@@ -366,7 +468,8 @@ const loadAppointments = async () => {
             amount: item.totalAmount || 0,
             status: mapStatus(item.status),
             remark: item.remark || '',
-            reviewed
+            reviewed,
+            review: reviewData
           }
         })
       )
@@ -437,6 +540,104 @@ onMounted(() => {
 
 :deep(.el-tabs__nav-wrap::after) {
   display: none;
+}
+
+.review-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.review-detail__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.review-detail__info h4 {
+  margin: 0 0 4px;
+  font-size: 16px;
+  color: #303133;
+}
+
+.review-detail__order {
+  margin: 0;
+  font-size: 13px;
+  color: #909399;
+}
+
+.review-detail__score {
+  text-align: right;
+}
+
+.review-detail__time {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.review-detail__content {
+  padding: 12px;
+  background-color: #f5f7fa;
+  border-radius: 6px;
+}
+
+.review-detail__text {
+  margin: 0 0 10px;
+  line-height: 1.6;
+  color: #606266;
+}
+
+.review-detail__images {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.review-detail__image {
+  width: 90px;
+  height: 90px;
+  border-radius: 6px;
+  object-fit: cover;
+}
+
+.review-detail__scores {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.review-detail__score-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: #606266;
+}
+
+.review-detail__reply {
+  padding: 14px;
+  background-color: #ecf5ff;
+  border-radius: 6px;
+}
+
+.review-detail__reply-label {
+  font-weight: 600;
+  color: #409eff;
+  margin-bottom: 6px;
+}
+
+.review-detail__reply-text {
+  margin: 0 0 6px;
+  color: #606266;
+  line-height: 1.6;
+}
+
+.review-detail__reply-time {
+  font-size: 12px;
+  color: #909399;
 }
 </style>
 
