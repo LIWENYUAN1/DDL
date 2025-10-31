@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.demo.mapper.AppointmentReviewMapper">
+
+    <!-- 根据用户ID查询评价列表 -->
+    <select id="selectByUserId" resultType="com.example.demo.entity.AppointmentReview">
+        SELECT
+            ar.*,
+            m.merchant_name as merchantName,
+            a.order_no as orderNo,
+            (SELECT GROUP_CONCAT(si.item_name SEPARATOR ', ')
+             FROM appointment_service_item asi
+             LEFT JOIN service_item si ON asi.service_item_id = si.id
+             WHERE asi.appointment_id = ar.appointment_id) as serviceItemName
+        FROM appointment_review ar
+        LEFT JOIN merchant m ON ar.merchant_id = m.id
+        LEFT JOIN appointment a ON ar.appointment_id = a.id
+        WHERE ar.user_id = #{userId}
+        ORDER BY ar.create_time DESC
+    </select>
+
+    <!-- 根据商家ID查询评价列表 -->
+    <select id="selectByMerchantId" resultType="com.example.demo.entity.AppointmentReview">
+        SELECT
+            ar.*,
+            u.username as username,
+            a.order_no as orderNo,
+            (SELECT GROUP_CONCAT(si.item_name SEPARATOR ', ')
+             FROM appointment_service_item asi
+             LEFT JOIN service_item si ON asi.service_item_id = si.id
+             WHERE asi.appointment_id = ar.appointment_id) as serviceItemName
+        FROM appointment_review ar
+        LEFT JOIN sys_user u ON ar.user_id = u.id
+        LEFT JOIN appointment a ON ar.appointment_id = a.id
+        WHERE ar.merchant_id = #{merchantId}
+        AND ar.status = 1
+        ORDER BY ar.create_time DESC
+    </select>
+
+    <!-- 根据预约ID查询评价 -->
+    <select id="selectByAppointmentId" resultType="com.example.demo.entity.AppointmentReview">
+        SELECT
+            ar.*,
+            u.username as username,
+            m.merchant_name as merchantName
+        FROM appointment_review ar
+        LEFT JOIN sys_user u ON ar.user_id = u.id
+        LEFT JOIN merchant m ON ar.merchant_id = m.id
+        WHERE ar.appointment_id = #{appointmentId}
+    </select>
+
+    <!-- 查询商家的平均评分 -->
+    <select id="selectAvgScoreByMerchantId" resultType="java.lang.Double">
+        SELECT AVG(score)
+        FROM appointment_review
+        WHERE merchant_id = #{merchantId}
+        AND status = 1
+    </select>
+
+</mapper>
+
+
