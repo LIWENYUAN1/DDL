@@ -226,6 +226,7 @@ export const useAppointmentStore = defineStore('appointment', {
             userPhone: item.contactPhone || '',
             serviceName: item.serviceItemName || '未知服务',
             appointmentTime: item.appointmentTime,
+            price: Number(item.totalAmount ?? item.servicePrice ?? 0),
             status: this.mapStatusFromBackend(item.status),
             motorcycleModel: item.motorcycleModel || '',
             licensePlate: item.licensePlate || '',
