@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.demo.mapper.MotorcycleMapper">
+
+    <!-- 根据车主ID查询车辆列表 -->
+    <select id="selectByOwnerId" resultType="com.example.demo.entity.Motorcycle">
+        SELECT *
+        FROM motorcycle
+        WHERE owner_id = #{ownerId}
+        ORDER BY create_time DESC
+    </select>
+
+    <!-- 根据车牌号查询车辆 -->
+    <select id="selectByLicensePlate" resultType="com.example.demo.entity.Motorcycle">
+        SELECT *
+        FROM motorcycle
+        WHERE license_plate = #{licensePlate}
+        LIMIT 1
+    </select>
+
+</mapper>

@@ -6,16 +6,18 @@ import com.example.demo.config.JwtConfig;
 import com.example.demo.dto.LoginRequestDTO;
 import com.example.demo.dto.RegisterRequestDTO;
 import com.example.demo.dto.UserDTO;
+import com.example.demo.entity.OwnerInfo;
 import com.example.demo.entity.SysUser;
 import com.example.demo.exception.BusinessException;
 import com.example.demo.mapper.SysUserMapper;
+import com.example.demo.mapper.OwnerInfoMapper;
 import com.example.demo.service.SysUserService;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
@@ -33,6 +35,9 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
 
     @Autowired
     private JwtConfig jwtConfig;
+
+    @Autowired
+    private OwnerInfoMapper ownerInfoMapper;
 
     @Override
     public UserDTO login(LoginRequestDTO loginRequestDTO) {
@@ -65,10 +70,18 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         userDTO.setId(user.getId());
         userDTO.setUsername(user.getUsername());
         userDTO.setPhone(user.getPhone());
+        userDTO.setEmail(user.getEmail());
         userDTO.setUserType(user.getUserType());
         userDTO.setAvatar(user.getAvatar());
         userDTO.setRealName(user.getRealName());
         userDTO.setToken(token);
+
+        OwnerInfo ownerInfo = ownerInfoMapper.selectByUserId(user.getId());
+        if (ownerInfo != null) {
+            userDTO.setAddress(ownerInfo.getAddress());
+            userDTO.setLatitude(convertToDouble(ownerInfo.getLatitude()));
+            userDTO.setLongitude(convertToDouble(ownerInfo.getLongitude()));
+        }
 
         return userDTO;
     }
@@ -117,9 +130,17 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         userDTO.setId(user.getId());
         userDTO.setUsername(user.getUsername());
         userDTO.setPhone(user.getPhone());
+        userDTO.setEmail(user.getEmail());
         userDTO.setUserType(user.getUserType());
         userDTO.setAvatar(user.getAvatar());
         userDTO.setRealName(user.getRealName());
+
+        OwnerInfo ownerInfo = ownerInfoMapper.selectByUserId(userId);
+        if (ownerInfo != null) {
+            userDTO.setAddress(ownerInfo.getAddress());
+            userDTO.setLatitude(convertToDouble(ownerInfo.getLatitude()));
+            userDTO.setLongitude(convertToDouble(ownerInfo.getLongitude()));
+        }
         return userDTO;
     }
 
@@ -140,9 +161,39 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         if (userDTO.getPhone() != null) {
             user.setPhone(userDTO.getPhone());
         }
+        if (userDTO.getEmail() != null) {
+            user.setEmail(userDTO.getEmail());
+        }
         user.setUpdateTime(LocalDateTime.now());
 
-        return this.updateById(user);
+        boolean updated = this.updateById(user);
+
+        if (userDTO.getAddress() != null || userDTO.getLatitude() != null || userDTO.getLongitude() != null) {
+            OwnerInfo ownerInfo = ownerInfoMapper.selectByUserId(userDTO.getId());
+            if (ownerInfo == null) {
+                ownerInfo = new OwnerInfo();
+                ownerInfo.setUserId(userDTO.getId());
+                ownerInfo.setCreateTime(LocalDateTime.now());
+            }
+            if (userDTO.getAddress() != null) {
+                ownerInfo.setAddress(userDTO.getAddress());
+            }
+            if (userDTO.getLatitude() != null) {
+                ownerInfo.setLatitude(BigDecimal.valueOf(userDTO.getLatitude()));
+            }
+            if (userDTO.getLongitude() != null) {
+                ownerInfo.setLongitude(BigDecimal.valueOf(userDTO.getLongitude()));
+            }
+            ownerInfo.setUpdateTime(LocalDateTime.now());
+
+            if (ownerInfo.getId() == null) {
+                ownerInfoMapper.insert(ownerInfo);
+            } else {
+                ownerInfoMapper.updateById(ownerInfo);
+            }
+        }
+
+        return updated;
     }
 
     @Override
@@ -162,6 +213,10 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
         user.setUpdateTime(LocalDateTime.now());
 
         return this.updateById(user);
+    }
+
+    private Double convertToDouble(BigDecimal value) {
+        return value != null ? value.doubleValue() : null;
     }
 
     private String generateToken(SysUser user) {

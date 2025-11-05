@@ -28,6 +28,8 @@ public enum ResultCode {
     OLD_PASSWORD_ERROR(400, "原密码错误"),
     MERCHANT_NOT_EXIST(404, "商家不存在"),
     MOTORCYCLE_NOT_EXIST(404, "车辆不存在"),
+    LICENSE_PLATE_ALREADY_EXISTS(400, "车牌号已存在"),
+    VIN_ALREADY_EXISTS(400, "车辆识别码已存在"),
     APPOINTMENT_NOT_EXIST(404, "预约不存在"),
     APPOINTMENT_STATUS_ERROR(400, "预约状态错误"),
     APPOINTMENT_NOT_COMPLETED(400, "预约未完成，无法评价"),

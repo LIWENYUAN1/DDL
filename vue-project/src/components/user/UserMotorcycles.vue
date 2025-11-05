@@ -133,20 +133,33 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox, FormInstance, FormRules } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
+import {
+  fetchMotorcycles,
+  createMotorcycle,
+  updateMotorcycle,
+  removeMotorcycle,
+  type MotorcyclePayload
+} from '@/api/motorcycle'
+
+interface MotorcycleItem extends MotorcyclePayload {
+  id: number
+  status?: number
+  image?: string
+}
 
 // 状态
 const loading = ref(false)
 const submitting = ref(false)
 const showAddDialog = ref(false)
 const isEdit = ref(false)
-const motorcycles = ref<any[]>([])
+const motorcycles = ref<MotorcycleItem[]>([])
 const formRef = ref<FormInstance>()
 
 const defaultImage = 'https://via.placeholder.com/300x200?text=Motorcycle'
 
 // 表单数据
 const motorcycleForm = reactive({
-  id: null,
+  id: null as number | null,
   brand: '',
   model: '',
   licensePlate: '',
@@ -164,45 +177,27 @@ const rules = reactive<FormRules>({
     { required: true, message: '请输入车型', trigger: 'blur' }
   ],
   displacement: [
-    { required: true, message: '请输入排量', trigger: 'blur' }
+    { required: true, message: '请输入排量', trigger: 'change' }
   ]
 })
 
-// 模拟数据
-const mockMotorcycles = [
-  {
-    id: 1,
-    brand: '本田',
-    model: 'CB400X',
-    licensePlate: '云A12345',
-    displacement: 400,
-    purchaseDate: '2023-05-15',
-    vin: 'JH2NC5100MK123456',
-    status: 1,
-    image: ''
-  },
-  {
-    id: 2,
-    brand: '雅马哈',
-    model: 'YZF-R3',
-    licensePlate: '',
-    displacement: 321,
-    purchaseDate: '2024-01-20',
-    vin: '',
-    status: 1,
-    image: ''
-  }
-]
-
 // 编辑车辆
-const editMotorcycle = (motorcycle: any) => {
+const editMotorcycle = (motorcycle: MotorcycleItem) => {
   isEdit.value = true
-  Object.assign(motorcycleForm, motorcycle)
+  Object.assign(motorcycleForm, {
+    id: motorcycle.id,
+    brand: motorcycle.brand,
+    model: motorcycle.model,
+    licensePlate: motorcycle.licensePlate || '',
+    displacement: motorcycle.displacement || 150,
+    purchaseDate: motorcycle.purchaseDate || '',
+    vin: motorcycle.vin || ''
+  })
   showAddDialog.value = true
 }
 
 // 删除车辆
-const deleteMotorcycle = (motorcycle: any) => {
+const deleteMotorcycle = (motorcycle: MotorcycleItem) => {
   ElMessageBox.confirm(
     '确定要删除这辆车吗？',
     '提示',
@@ -211,27 +206,47 @@ const deleteMotorcycle = (motorcycle: any) => {
       cancelButtonText: '取消',
       type: 'warning'
     }
-  ).then(() => {
-    // 调用API删除
-    ElMessage.success('删除成功')
-    loadMotorcycles()
-  })
+  )
+    .then(async () => {
+      await removeMotorcycle(motorcycle.id)
+      ElMessage.success('删除成功')
+      await loadMotorcycles()
+    })
+    .catch(() => {})
 }
+
+const buildPayload = (): MotorcyclePayload => ({
+  brand: motorcycleForm.brand.trim(),
+  model: motorcycleForm.model.trim(),
+  licensePlate: motorcycleForm.licensePlate?.trim() || undefined,
+  displacement: motorcycleForm.displacement || undefined,
+  purchaseDate: motorcycleForm.purchaseDate || undefined,
+  vin: motorcycleForm.vin?.trim() || undefined
+})
 
 // 提交表单
 const submitForm = async () => {
   try {
     await formRef.value?.validate()
     submitting.value = true
-    
-    // 调用API保存
-    await new Promise(resolve => setTimeout(resolve, 500))
-    
-    ElMessage.success(isEdit.value ? '更新成功' : '添加成功')
+
+    const payload = buildPayload()
+
+    if (isEdit.value && motorcycleForm.id) {
+      await updateMotorcycle(motorcycleForm.id, payload)
+      ElMessage.success('车辆信息更新成功')
+    } else {
+      await createMotorcycle(payload)
+      ElMessage.success('车辆添加成功')
+    }
+
     showAddDialog.value = false
-    loadMotorcycles()
+    await loadMotorcycles()
   } catch (error) {
-    console.error('表单验证失败', error)
+    if (error instanceof Error) {
+      ElMessage.error(error.message)
+    }
+    console.error('保存车辆信息失败', error)
   } finally {
     submitting.value = false
   }
@@ -249,21 +264,23 @@ const resetForm = () => {
     purchaseDate: '',
     vin: ''
   })
-  formRef.value?.resetFields()
+  formRef.value?.clearValidate()
 }
 
 // 加载车辆列表
 const loadMotorcycles = async () => {
   loading.value = true
   try {
-    // 调用API
-    // const response = await motorcycleApi.getList()
-    // motorcycles.value = response.data
-    
-    // 模拟数据
-    motorcycles.value = mockMotorcycles
+    const response = await fetchMotorcycles()
+    motorcycles.value = (response.data || []).map(item => ({
+      ...item,
+      displacement: item.displacement ?? undefined,
+      purchaseDate: item.purchaseDate || '',
+      status: item.status ?? 1
+    }))
   } catch (error) {
-    ElMessage.error('加载失败')
+    ElMessage.error('车辆信息加载失败')
+    console.error('loadMotorcycles error', error)
   } finally {
     loading.value = false
   }

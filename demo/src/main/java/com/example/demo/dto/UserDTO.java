@@ -33,6 +33,11 @@ public class UserDTO implements Serializable {
     private String phone;
 
     /**
+     * 邮箱
+     */
+    private String email;
+
+    /**
      * 用户类型：1-普通用户，2-商家，3-管理员
      */
     private Integer userType;
@@ -51,4 +56,19 @@ public class UserDTO implements Serializable {
      * JWT令牌
      */
     private String token;
+
+    /**
+     * 常用地址
+     */
+    private String address;
+
+    /**
+     * 常用地址纬度
+     */
+    private Double latitude;
+
+    /**
+     * 常用地址经度
+     */
+    private Double longitude;
 }

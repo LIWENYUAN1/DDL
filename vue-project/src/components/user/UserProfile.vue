@@ -240,11 +240,21 @@ const saveProfile = async () => {
     await profileFormRef.value?.validate()
     saving.value = true
 
-    // await userApi.updateUserInfo(profileForm)
-    await new Promise(resolve => setTimeout(resolve, 500))
+    const payload = {
+      realName: profileForm.realName,
+      phone: profileForm.phone,
+      email: profileForm.email,
+      address: profileForm.address,
+      avatar: profileForm.avatar
+    }
 
+    await userApi.updateUserInfo(payload)
     ElMessage.success('保存成功')
+    await loadUserInfo()
   } catch (error) {
+    if (error instanceof Error) {
+      ElMessage.error(error.message)
+    }
     console.error('保存失败', error)
   } finally {
     saving.value = false
@@ -257,15 +267,19 @@ const changePassword = async () => {
     await passwordFormRef.value?.validate()
     changing.value = true
 
-    // await userApi.changePassword(passwordForm)
-    await new Promise(resolve => setTimeout(resolve, 500))
+    await userApi.changePassword({
+      oldPassword: passwordForm.oldPassword,
+      newPassword: passwordForm.newPassword
+    })
 
     ElMessage.success('密码修改成功，请重新登录')
-    // 清空表单
     passwordForm.oldPassword = ''
     passwordForm.newPassword = ''
     passwordForm.confirmPassword = ''
   } catch (error) {
+    if (error instanceof Error) {
+      ElMessage.error(error.message)
+    }
     console.error('修改失败', error)
   } finally {
     changing.value = false
@@ -280,16 +294,18 @@ const saveSettings = () => {
 // 加载用户信息
 const loadUserInfo = async () => {
   try {
-    const userInfo = localStorage.getItem('userInfo')
-    if (userInfo) {
-      const user = JSON.parse(userInfo)
-      profileForm.username = user.username
-      profileForm.phone = user.phone || ''
-      profileForm.email = user.email || ''
-      profileForm.realName = user.realName || ''
-      profileForm.avatar = user.avatar || ''
-    }
+    const response = await userApi.getUserInfo()
+    const user = response.data || {}
+    profileForm.username = user.username || ''
+    profileForm.phone = user.phone || ''
+    profileForm.email = user.email || ''
+    profileForm.realName = user.realName || ''
+    profileForm.avatar = user.avatar || ''
+    profileForm.address = user.address || ''
+
+    localStorage.setItem('userInfo', JSON.stringify(user))
   } catch (error) {
+    ElMessage.error('获取用户信息失败')
     console.error('加载用户信息失败', error)
   }
 }

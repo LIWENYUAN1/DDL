@@ -1,6 +1,7 @@
 package com.example.demo.controller;
 
 import com.example.demo.common.R;
+import com.example.demo.dto.PasswordResetDTO;
 import com.example.demo.dto.UserDTO;
 import com.example.demo.entity.SysUser;
 import com.example.demo.service.SysUserService;
@@ -59,12 +60,12 @@ public class UserController {
      * @return 重置结果
      */
     @PostMapping("/resetPassword")
-    public R<Boolean> resetPassword(@RequestParam String oldPassword, @RequestParam String newPassword) {
+    public R<Boolean> resetPassword(@Validated @RequestBody PasswordResetDTO passwordResetDTO) {
         // 获取当前登录用户
         Long userId = getCurrentUserId();
-        
+
         // 重置密码
-        boolean result = sysUserService.resetPassword(userId, oldPassword, newPassword);
+        boolean result = sysUserService.resetPassword(userId, passwordResetDTO.getOldPassword(), passwordResetDTO.getNewPassword());
         return R.success(result);
     }
 
