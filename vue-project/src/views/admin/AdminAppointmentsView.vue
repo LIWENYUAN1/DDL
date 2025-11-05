@@ -35,7 +35,7 @@ const statusOptions = [
   { label: '已确认', value: 'confirmed' },
   { label: '进行中', value: 'processing' },
   { label: '已完成', value: 'completed' },
-  { label: '已取消', value: 'cancelled' },
+  { label: '已取消', value: 'canceled' },
   { label: '已拒绝', value: 'rejected' }
 ]
 
@@ -166,7 +166,7 @@ const getStatusTagStyle = (status: string) => {
     'confirmed': { color: '#409EFF', backgroundColor: '#ECF5FF' },
     'processing': { color: '#67C23A', backgroundColor: '#F0F9EB' },
     'completed': { color: '#909399', backgroundColor: '#F4F4F5' },
-    'cancelled': { color: '#909399', backgroundColor: '#F4F4F5' },
+    'canceled': { color: '#909399', backgroundColor: '#F4F4F5' },
     'rejected': { color: '#F56C6C', backgroundColor: '#FEF0F0' }
   }
   return styleMap[status] || { color: '#909399', backgroundColor: '#F4F4F5' }

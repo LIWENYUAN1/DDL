@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Clock, Check, Close, RefreshLeft, StarFilled, Search, Filter } from '@element-plus/icons-vue'
+import { Clock, Check, Close, StarFilled, Search, Filter, WarningFilled } from '@element-plus/icons-vue'
 import { useAppointmentStore } from '@/store/modules/appointment'
 
 const appointmentStore = useAppointmentStore()
@@ -57,10 +57,10 @@ const shopAppointments = computed(() => {
 const statusConfig = {
   pending: { text: '待确认', color: 'warning', icon: Clock },
   confirmed: { text: '已确认', color: 'primary', icon: Check },
-  in_progress: { text: '进行中', color: 'info', icon: RefreshLeft },
   completed: { text: '已完成', color: 'success', icon: StarFilled },
-  canceled: { text: '已取消', color: 'danger', icon: Close }
-}
+  canceled: { text: '已取消', color: 'danger', icon: Close },
+  breached: { text: '已违约', color: 'danger', icon: WarningFilled }
+} as const
 
 // 获取状态颜色
 const getStatusColor = (status) => {
@@ -81,9 +81,9 @@ const statusOptions = [
   { label: '全部', value: 'all' },
   { label: '待确认', value: 'pending' },
   { label: '已确认', value: 'confirmed' },
-  { label: '进行中', value: 'in_progress' },
   { label: '已完成', value: 'completed' },
-  { label: '已取消', value: 'canceled' }
+  { label: '已取消', value: 'canceled' },
+  { label: '已违约', value: 'breached' }
 ]
 
 const detailActions = computed(() => {
@@ -148,10 +148,6 @@ const updateAppointmentStatus = async (appointmentId: string, newStatus: string)
         confirmTitle = '确认预约'
         confirmMessage = '确定要确认该预约吗？'
         break
-      case 'in_progress':
-        confirmTitle = '开始服务'
-        confirmMessage = '确定要开始为该客户服务吗？'
-        break
       case 'completed':
         confirmTitle = '完成服务'
         confirmMessage = '确定该服务已完成吗？'
@@ -207,13 +203,8 @@ const getAvailableActions = (status: string) => {
       break
     case 'confirmed':
       actions.push(
-        { text: '开始服务', value: 'in_progress', type: 'primary' },
+        { text: '完成服务', value: 'completed', type: 'success' },
         { text: '取消', value: 'canceled', type: 'danger' }
-      )
-      break
-    case 'in_progress':
-      actions.push(
-        { text: '完成', value: 'completed', type: 'success' }
       )
       break
   }

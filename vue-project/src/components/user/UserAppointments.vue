@@ -16,9 +16,9 @@
         <el-tab-pane label="全部" name="all" />
         <el-tab-pane label="待确认" name="pending" />
         <el-tab-pane label="已确认" name="confirmed" />
-        <el-tab-pane label="进行中" name="in_progress" />
         <el-tab-pane label="已完成" name="completed" />
-        <el-tab-pane label="已取消" name="cancelled" />
+        <el-tab-pane label="已取消" name="canceled" />
+        <el-tab-pane label="已违约" name="breached" />
       </el-tabs>
 
       <!-- 预约列表 -->
@@ -307,7 +307,7 @@ import RescheduleDialog from './RescheduleDialog.vue'
 import ComplaintDialog from './ComplaintDialog.vue'
 import { useNotificationStore } from '@/store/modules/notification'
 
-type AppointmentStatus = 'pending' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled'
+type AppointmentStatus = 'pending' | 'confirmed' | 'completed' | 'canceled' | 'breached'
 type PaymentStatus = 'unpaid' | 'paid' | 'partial' | 'refunded'
 
 interface AppointmentItem {
@@ -423,9 +423,9 @@ const getStatusType = (status: string) => {
   const typeMap: Record<string, any> = {
     pending: 'warning',
     confirmed: 'info',
-    in_progress: 'primary',
     completed: 'success',
-    cancelled: 'danger'
+    canceled: 'danger',
+    breached: 'danger'
   }
   return typeMap[status] || 'info'
 }
@@ -435,9 +435,9 @@ const getStatusText = (status: string) => {
   const textMap: Record<string, string> = {
     pending: '待确认',
     confirmed: '已确认',
-    in_progress: '进行中',
     completed: '已完成',
-    cancelled: '已取消'
+    canceled: '已取消',
+    breached: '已违约'
   }
   return textMap[status] || status
 }
@@ -492,7 +492,7 @@ const cancelAppointment = (appointment: AppointmentItem) => {
         if (appointment.paymentStatus === 'paid') {
           appointment.paymentStatus = 'refunded'
         }
-        appointment.status = 'cancelled'
+        appointment.status = 'canceled'
         loadAppointments()
       } else {
         ElMessage.error(response.msg || '取消失败')
@@ -706,7 +706,7 @@ const loadAppointments = async () => {
           let reviewed = false
           let reviewData: ReviewItem | null = null
 
-          if (item.status === 3) {
+          if (item.status === 2) {
             try {
               const reviewResponse = await getReviewByAppointmentId(item.id)
               if (reviewResponse.code === 200 && reviewResponse.data) {
@@ -762,9 +762,9 @@ const mapStatus = (backendStatus: number): AppointmentStatus => {
   const statusMap: Record<number, AppointmentStatus> = {
     0: 'pending',      // 待确认
     1: 'confirmed',    // 已确认
-    2: 'in_progress',  // 进行中
-    3: 'completed',    // 已完成
-    4: 'cancelled'     // 已取消
+    2: 'completed',    // 已完成
+    3: 'canceled',     // 已取消
+    4: 'breached'      // 已违约
   }
   return statusMap[backendStatus] || 'pending'
 }
@@ -788,7 +788,7 @@ const mapPaymentStatus = (status: any, appointmentStatus: AppointmentStatus): Pa
   if (appointmentStatus === 'completed') {
     return 'paid'
   }
-  if (appointmentStatus === 'cancelled') {
+  if (appointmentStatus === 'canceled') {
     return 'refunded'
   }
   return 'unpaid'

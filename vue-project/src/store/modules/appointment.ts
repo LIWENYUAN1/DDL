@@ -71,8 +71,8 @@ export const useAppointmentStore = defineStore('appointment', {
     completedAppointments: function(state) {
       return state.userAppointments.filter((app: Appointment) => app?.status === 'completed')
     },
-    cancelledAppointments: function(state) {
-      return state.userAppointments.filter((app: Appointment) => app?.status === 'cancelled')
+    canceledAppointments: function(state) {
+      return state.userAppointments.filter((app: Appointment) => app?.status === 'canceled')
     },
     shopPendingAppointments: function(state) {
       return state.shopAppointments.filter((app: Appointment) => app?.status === 'pending')
@@ -257,22 +257,21 @@ export const useAppointmentStore = defineStore('appointment', {
       const statusMap: Record<number, string> = {
         0: 'pending',      // 待确认
         1: 'confirmed',    // 已确认
-        2: 'in_progress',  // 进行中
-        3: 'completed',    // 已完成
-        4: 'canceled'      // 已取消
+        2: 'completed',    // 已完成
+        3: 'canceled',     // 已取消
+        4: 'breached'      // 已违约
       };
       return statusMap[backendStatus] || 'pending';
     },
-    
+
     // 状态映射：前端状态 -> 后端状态
     mapStatusToBackend(frontendStatus: string): number {
       const statusMap: Record<string, number> = {
         'pending': 0,
         'confirmed': 1,
-        'in_progress': 2,
-        'completed': 3,
-        'canceled': 4,
-        'cancelled': 4
+        'completed': 2,
+        'canceled': 3,
+        'breached': 4
       };
       return statusMap[frontendStatus] || 0;
     },
@@ -290,20 +289,20 @@ export const useAppointmentStore = defineStore('appointment', {
         } else if (status === 'completed') {
           // 完成预约
           response = await appointmentApi.completeAppointment(appointmentId);
-        } else if (status === 'canceled' || status === 'cancelled') {
+        } else if (status === 'canceled') {
           // 取消预约
           response = await appointmentApi.cancelMerchantAppointment(appointmentId);
         } else {
           throw new Error('不支持的状态更新操作');
         }
-        
+
         if (response.code === 200) {
           // 更新本地状态
           const shopIndex = this.shopAppointments.findIndex((app: Appointment) => app?.id === id);
           if (shopIndex !== -1 && this.shopAppointments[shopIndex]) {
             this.shopAppointments[shopIndex].status = status;
           }
-          
+
           return { success: true, message: response.msg || '状态更新成功' };
         } else {
           throw new Error(response.msg || '状态更新失败');
@@ -323,13 +322,13 @@ export const useAppointmentStore = defineStore('appointment', {
         // 更新用户预约列表中的状态
         const userIndex = this.userAppointments.findIndex((app: Appointment) => app?.id === id);
         if (userIndex !== -1 && this.userAppointments[userIndex]) {
-          this.userAppointments[userIndex].status = 'cancelled';
+          this.userAppointments[userIndex].status = 'canceled';
         }
-        
+
         // 更新商家预约列表中的状态
         const shopIndex = this.shopAppointments.findIndex((app: Appointment) => app?.id === id);
         if (shopIndex !== -1 && this.shopAppointments[shopIndex]) {
-          this.shopAppointments[shopIndex].status = 'cancelled';
+          this.shopAppointments[shopIndex].status = 'canceled';
         }
         
         return mockResponse;

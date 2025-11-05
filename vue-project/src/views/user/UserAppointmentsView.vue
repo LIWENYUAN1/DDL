@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Calendar, Clock, Star, StarFilled, MapPin, Phone, User, Shop, Close, Check, RefreshLeft } from '@element-plus/icons-vue'
+import { Calendar, Clock, Star, StarFilled, MapPin, Phone, User, Shop, Close, Check, WarningFilled, InfoFilled } from '@element-plus/icons-vue'
 import { useAppointmentStore } from '@/store/modules/appointment'
 import { useRouter } from 'vue-router'
 
@@ -17,22 +17,24 @@ const loadingText = ref('')
 const appointments = computed(() => {
   return appointmentStore.userAppointments.filter(appointment => {
     if (activeTab.value === 'pending') {
-      return ['pending', 'confirmed', 'in_progress'].includes(appointment.status)
+      return ['pending', 'confirmed'].includes(appointment.status)
     } else if (activeTab.value === 'completed') {
       return appointment.status === 'completed'
     } else if (activeTab.value === 'canceled') {
       return appointment.status === 'canceled'
+    } else if (activeTab.value === 'breached') {
+      return appointment.status === 'breached'
     }
     return true
   })
 })
 
 const statusConfig = {
-  pending: { text: '待确认', color: 'warning', icon: 'Clock' },
-  confirmed: { text: '已确认', color: 'primary', icon: 'Check' },
-  in_progress: { text: '进行中', color: 'info', icon: 'RefreshLeft' },
-  completed: { text: '已完成', color: 'success', icon: 'StarFilled' },
-  canceled: { text: '已取消', color: 'danger', icon: 'Close' }
+  pending: { text: '待确认', color: 'warning', icon: Clock },
+  confirmed: { text: '已确认', color: 'primary', icon: Check },
+  completed: { text: '已完成', color: 'success', icon: StarFilled },
+  canceled: { text: '已取消', color: 'danger', icon: Close },
+  breached: { text: '已违约', color: 'danger', icon: WarningFilled }
 }
 
 // 获取状态颜色
@@ -42,7 +44,7 @@ const getStatusColor = (status) => {
 
 // 获取状态图标
 const getStatusIcon = (status) => {
-  return statusConfig[status]?.icon || 'InfoFilled'
+  return statusConfig[status]?.icon || InfoFilled
 }
 
 // 获取状态文本
@@ -419,6 +421,73 @@ const formatDate = (dateString) => {
             <div class="appointment-footer">
               <el-button @click="reBook(appointment.id)">
                 重新预约
+              </el-button>
+            </div>
+          </el-card>
+        </div>
+      </el-tab-pane>
+
+      <el-tab-pane label="已违约" name="breached">
+        <div class="appointment-list">
+          <div v-if="loading" class="loading-state">
+            <el-skeleton :rows="3" animated />
+          </div>
+
+          <div v-else-if="appointments.length === 0" class="empty-state">
+            <el-empty description="暂无违约的预约" />
+          </div>
+
+          <el-card
+            v-for="appointment in appointments"
+            :key="appointment.id"
+            class="appointment-card"
+            shadow="hover"
+          >
+            <div class="appointment-header">
+              <div class="shop-info">
+                <h3>{{ appointment.shopName }}</h3>
+                <div class="shop-meta">
+                  <span class="meta-item"><MapPin class="meta-icon" /> {{ appointment.shopAddress }}</span>
+                  <span class="meta-item"><Phone class="meta-icon" /> {{ appointment.shopPhone }}</span>
+                </div>
+              </div>
+              <el-tag
+                :type="getStatusColor(appointment.status)"
+                size="large"
+              >
+                <el-icon><component :is="getStatusIcon(appointment.status)"></component></el-icon>
+                {{ getStatusText(appointment.status) }}
+              </el-tag>
+            </div>
+
+            <div class="appointment-body">
+              <div class="service-info">
+                <h4>{{ appointment.serviceName }}</h4>
+                <p class="service-desc">{{ appointment.serviceDescription || '暂无描述' }}</p>
+              </div>
+
+              <div class="appointment-details">
+                <div class="detail-item">
+                  <div class="detail-label">预约时间</div>
+                  <div class="detail-value">
+                    <el-icon><Calendar /></el-icon>
+                    {{ formatDate(appointment.appointmentTime) }}
+                  </div>
+                </div>
+                <div class="detail-item">
+                  <div class="detail-label">违约说明</div>
+                  <div class="detail-value">{{ appointment.breachReason || '系统记录违约' }}</div>
+                </div>
+                <div class="detail-item">
+                  <div class="detail-label">违约时间</div>
+                  <div class="detail-value">{{ appointment.breachedAt ? formatDate(appointment.breachedAt) : '-' }}</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="appointment-footer">
+              <el-button type="primary" @click="reBook(appointment.id)">
+                再次预约
               </el-button>
             </div>
           </el-card>

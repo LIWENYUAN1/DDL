@@ -6,6 +6,7 @@ import com.example.demo.dto.AppointmentRequestDTO;
 import com.example.demo.dto.PageDTO;
 import com.example.demo.entity.Appointment;
 import com.example.demo.entity.AppointmentServiceItem;
+import com.example.demo.entity.Merchant;
 import com.example.demo.entity.Motorcycle;
 import com.example.demo.entity.OwnerInfo;
 import com.example.demo.exception.BusinessException;
@@ -169,8 +170,9 @@ public class AppointmentServiceImpl extends ServiceImpl<AppointmentMapper, Appoi
 
         // 验证权限
         if (isMerchant) {
-            // 商家取消：验证是否是该商家的预约
-            if (merchantMapper.selectByUserId(userId) == null) {
+            // 商家取消：验证商家身份及预约归属
+            Merchant merchant = merchantMapper.selectByUserId(userId);
+            if (merchant == null || !appointment.getMerchantId().equals(merchant.getId())) {
                 throw new BusinessException(ResultCode.PERMISSION_DENIED);
             }
         } else {

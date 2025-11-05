@@ -1,13 +1,16 @@
 package com.example.demo.controller;
 
-import com.example.demo.common.R;
 import com.example.demo.common.PageResult;
+import com.example.demo.common.R;
+import com.example.demo.common.ResultCode;
 import com.example.demo.dto.AppointmentRequestDTO;
 import com.example.demo.dto.PageDTO;
 import com.example.demo.entity.Appointment;
+import com.example.demo.entity.Merchant;
 import com.example.demo.entity.SysUser;
 import com.example.demo.mapper.MerchantMapper;
 import com.example.demo.service.AppointmentService;
+import com.example.demo.exception.BusinessException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -55,7 +58,12 @@ public class AppointmentController {
         Long userId = getCurrentUserId();
         
         // 查询商家信息
-        Long merchantId = merchantMapper.selectByUserId(userId).getId();
+        Merchant merchant = merchantMapper.selectByUserId(userId);
+        if (merchant == null) {
+            throw new BusinessException(ResultCode.MERCHANT_NOT_EXIST);
+        }
+
+        Long merchantId = merchant.getId();
         
         // 确认预约
         boolean result = appointmentService.confirmAppointment(appointmentId, merchantId);
@@ -73,7 +81,12 @@ public class AppointmentController {
         Long userId = getCurrentUserId();
         
         // 查询商家信息
-        Long merchantId = merchantMapper.selectByUserId(userId).getId();
+        Merchant merchant = merchantMapper.selectByUserId(userId);
+        if (merchant == null) {
+            throw new BusinessException(ResultCode.MERCHANT_NOT_EXIST);
+        }
+
+        Long merchantId = merchant.getId();
         
         // 完成预约
         boolean result = appointmentService.completeAppointment(appointmentId, merchantId);
@@ -147,7 +160,12 @@ public class AppointmentController {
         Long userId = getCurrentUserId();
         
         // 查询商家信息
-        Long merchantId = merchantMapper.selectByUserId(userId).getId();
+        Merchant merchant = merchantMapper.selectByUserId(userId);
+        if (merchant == null) {
+            throw new BusinessException(ResultCode.MERCHANT_NOT_EXIST);
+        }
+
+        Long merchantId = merchant.getId();
         
         // 获取预约列表
         List<Appointment> appointmentList = appointmentService.getMerchantAppointmentList(pageDTO, merchantId, status);
