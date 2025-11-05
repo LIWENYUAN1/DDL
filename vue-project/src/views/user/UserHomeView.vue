@@ -97,12 +97,29 @@
                 </el-button>
               </el-col>
             </el-row>
-            <div v-if="currentLocation" class="location-info">
-              <el-icon><Location /></el-icon>
-              <span>当前位置：{{ currentLocation }}</span>
-            </div>
           </el-card>
         </div>
+
+        <el-card
+          v-if="activeMenu === 'nearby'"
+          class="map-card"
+          shadow="never"
+        >
+          <template #header>
+            <div class="map-card-header">
+              <div class="map-card-title">
+                <el-icon><Location /></el-icon>
+                <span>地图定位</span>
+              </div>
+              <div v-if="currentLocation" class="map-card-location">
+                当前位置：{{ currentLocation }}
+              </div>
+            </div>
+          </template>
+          <div class="map-wrapper">
+            <div ref="mapContainer" class="map-container"></div>
+          </div>
+        </el-card>
 
         <!-- 附近商家列表 -->
         <div v-if="activeMenu === 'nearby'" class="shops-section">
@@ -145,7 +162,7 @@
                     <el-icon><Phone /></el-icon>
                     <span>{{ shop.phone }}</span>
                   </div>
-                  <div class="distance">距离：{{ shop.distance }}km</div>
+                  <div class="distance">距离：{{ formatDistance(shop.distance) }}</div>
                 </div>
                 <div class="shop-services">
                   <el-tag 
@@ -242,18 +259,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { 
-  Location, Calendar, User, Star, Odometer, Search, 
-  Clock, Phone, UserFilled, Tools 
+import {
+  Location, Calendar, User, Star, Odometer, Search,
+  Clock, Phone, UserFilled, Tools
 } from '@element-plus/icons-vue'
 import UserAppointments from '@/components/user/UserAppointments.vue'
 import UserMotorcycles from '@/components/user/UserMotorcycles.vue'
 import UserReviews from '@/components/user/UserReviews.vue'
 import UserProfile from '@/components/user/UserProfile.vue'
 import BookingDialog from '@/components/user/BookingDialog.vue'
+import { loadAMap } from '@/utils/amapLoader'
 
 const router = useRouter()
 
@@ -269,6 +287,15 @@ const searchQuery = ref('')
 const filterType = ref('')
 const currentLocation = ref('')
 const locationLoading = ref(false)
+
+// 地图相关
+const mapContainer = ref<HTMLDivElement | null>(null)
+const amap = ref<any>(null)
+const mapInstance = ref<any>(null)
+const mapReady = ref(false)
+const geocoder = ref<any>(null)
+const userMarker = ref<any>(null)
+let mapInitPromise: Promise<void> | null = null
 
 // 商家数据
 const loading = ref(false)
@@ -297,6 +324,7 @@ const mockShops = [
     rating: 4.5,
     reviewCount: 128,
     distance: 1.2,
+    location: [100.2676, 25.6065] as [number, number],
     services: ['机油保养', '刹车维修', '链条保养'],
     serviceItems: [
       { id: 3, name: '机油更换服务', price: 180, duration: 30 },
@@ -313,6 +341,7 @@ const mockShops = [
     rating: 4.8,
     reviewCount: 256,
     distance: 2.5,
+    location: [116.483, 39.914] as [number, number],
     services: ['基础保养', '刹车系统', '综合维护'],
     serviceItems: [
       { id: 1, name: '常规保养套餐', price: 200, duration: 60 },
@@ -357,44 +386,275 @@ const handleFilter = () => {
   // 筛选逻辑已在computed中实现
 }
 
-// 获取位置
-const getLocation = () => {
-  locationLoading.value = true
-  
+const calculateDistance = (start: [number, number], end: [number, number]) => {
+  try {
+    if (amap.value?.GeometryUtil?.distance) {
+      const meters = amap.value.GeometryUtil.distance(start, end)
+      if (typeof meters === 'number' && !Number.isNaN(meters)) {
+        return meters / 1000
+      }
+    }
+  } catch (error) {
+    console.warn('高德地图距离计算失败，使用兜底计算', error)
+  }
+
+  const toRad = (value: number) => (value * Math.PI) / 180
+  const [lng1, lat1] = start
+  const [lng2, lat2] = end
+  const R = 6371
+  const dLat = toRad(lat2 - lat1)
+  const dLng = toRad(lng2 - lng1)
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
+
+const formatDistance = (distance?: number) => {
+  if (typeof distance !== 'number' || Number.isNaN(distance)) {
+    return '未知'
+  }
+  if (distance < 1) {
+    return `${Math.round(distance * 1000)}m`
+  }
+  return `${distance.toFixed(1)}km`
+}
+
+const renderShopMarkers = (data: any[]) => {
+  if (!mapInstance.value || !amap.value) {
+    return
+  }
+
+  mapInstance.value.clearMap()
+
+  data.forEach((shop: any) => {
+    if (!shop.location) {
+      return
+    }
+
+    const marker = new amap.value.Marker({
+      position: shop.location,
+      title: shop.name,
+      map: mapInstance.value
+    })
+
+    marker.setLabel({
+      direction: 'top',
+      offset: new amap.value.Pixel(0, -28),
+      content: `<div class="map-marker-label">${shop.name}</div>`
+    })
+  })
+
+  if (userMarker.value) {
+    userMarker.value.setMap(mapInstance.value)
+  }
+
+  if (!userMarker.value && data.some(shop => shop.location)) {
+    mapInstance.value.setFitView()
+  }
+}
+
+const createUserMarker = (position: [number, number]) => {
+  if (!mapInstance.value || !amap.value) {
+    return
+  }
+
+  if (!userMarker.value) {
+    userMarker.value = new amap.value.Marker({
+      position,
+      map: mapInstance.value,
+      title: '当前位置',
+      icon: new amap.value.Icon({
+        image: 'https://a.amap.com/jsapi_demos/static/demo-center/icons/poi-marker-red.png',
+        imageSize: new amap.value.Size(25, 34),
+        size: new amap.value.Size(25, 34)
+      }),
+      offset: new amap.value.Pixel(-12, -34)
+    })
+
+    userMarker.value.setLabel({
+      direction: 'top',
+      offset: new amap.value.Pixel(0, -32),
+      content: '<div class="map-marker-label map-marker-label--user">我在这里</div>'
+    })
+  } else {
+    userMarker.value.setPosition(position)
+    userMarker.value.setMap(mapInstance.value)
+  }
+}
+
+const updateCurrentLocation = (lng: number, lat: number, formattedAddress?: string) => {
+  if (formattedAddress) {
+    currentLocation.value = formattedAddress
+    return
+  }
+
+  if (geocoder.value) {
+    geocoder.value.getAddress([lng, lat], (status: string, result: any) => {
+      if (status === 'complete' && result?.regeocode) {
+        currentLocation.value = result.regeocode.formattedAddress
+      } else {
+        currentLocation.value = `经度: ${lng.toFixed(4)}, 纬度: ${lat.toFixed(4)}`
+      }
+    })
+  } else {
+    currentLocation.value = `经度: ${lng.toFixed(4)}, 纬度: ${lat.toFixed(4)}`
+  }
+}
+
+const loadNearbyShops = (lat?: number, lng?: number) => {
+  loading.value = true
+
+  const hasLocation = typeof lat === 'number' && typeof lng === 'number'
+  const userPosition = hasLocation ? ([lng!, lat!] as [number, number]) : null
+
+  const data = mockShops.map((shop) => {
+    const distance = userPosition && shop.location
+      ? calculateDistance(userPosition, shop.location)
+      : shop.distance
+
+    return {
+      ...shop,
+      distance: typeof distance === 'number' ? Number(distance.toFixed(2)) : distance
+    }
+  })
+
+  if (userPosition) {
+    data.sort((a, b) => {
+      const distanceA = typeof a.distance === 'number' ? a.distance : Number.POSITIVE_INFINITY
+      const distanceB = typeof b.distance === 'number' ? b.distance : Number.POSITIVE_INFINITY
+      return distanceA - distanceB
+    })
+
+    if (mapInstance.value) {
+      mapInstance.value.setZoomAndCenter(14, userPosition)
+    }
+  } else if (mapInstance.value && data[0]?.location) {
+    mapInstance.value.setCenter(data[0].location)
+  }
+
+  shops.value = data
+  renderShopMarkers(data)
+  loading.value = false
+}
+
+const processLocation = (lng: number, lat: number, formattedAddress?: string) => {
+  createUserMarker([lng, lat])
+
+  if (mapInstance.value) {
+    mapInstance.value.setZoomAndCenter(15, [lng, lat])
+  }
+
+  updateCurrentLocation(lng, lat, formattedAddress)
+  loadNearbyShops(lat, lng)
+  locationLoading.value = false
+  ElMessage.success('定位成功')
+}
+
+const handleLocationSuccess = (data: any) => {
+  const position = data?.position
+  const lng = typeof position?.getLng === 'function' ? position.getLng() : position?.lng
+  const lat = typeof position?.getLat === 'function' ? position.getLat() : position?.lat
+
+  if (typeof lng !== 'number' || typeof lat !== 'number') {
+    handleLocationError(new Error('无法获取定位坐标'))
+    return
+  }
+
+  processLocation(lng, lat, data?.formattedAddress)
+}
+
+const handleLocationError = (error: any) => {
+  console.error('AMap geolocation error', error)
+
   if (navigator.geolocation) {
+    ElMessage.warning('地图定位失败，尝试使用浏览器定位')
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const { latitude, longitude } = position.coords
-        // 这里可以调用地图API获取地址
-        currentLocation.value = `纬度: ${latitude.toFixed(4)}, 经度: ${longitude.toFixed(4)}`
-        ElMessage.success('定位成功')
-        // 根据位置加载附近商家
-        loadNearbyShops(latitude, longitude)
-        locationLoading.value = false
+        processLocation(longitude, latitude)
       },
-      (error) => {
-        ElMessage.error('定位失败，请检查浏览器权限')
+      () => {
         locationLoading.value = false
-        // 使用默认位置
+        ElMessage.error('定位失败，请检查浏览器权限')
         loadNearbyShops()
       }
     )
   } else {
-    ElMessage.warning('浏览器不支持定位功能')
     locationLoading.value = false
+    ElMessage.warning('浏览器不支持定位功能')
     loadNearbyShops()
   }
 }
 
-// 加载附近商家
-const loadNearbyShops = (lat?: number, lng?: number) => {
-  loading.value = true
-  
-  // 模拟API调用
-  setTimeout(() => {
-    shops.value = mockShops
-    loading.value = false
-  }, 500)
+const initMap = async (): Promise<void> => {
+  if (mapReady.value) {
+    return
+  }
+
+  if (mapInitPromise) {
+    await mapInitPromise
+    return
+  }
+
+  mapInitPromise = (async () => {
+    try {
+      const AMap = await loadAMap()
+      amap.value = AMap
+      await nextTick()
+
+      if (!mapContainer.value) {
+        throw new Error('地图容器未初始化')
+      }
+
+      mapInstance.value = new AMap.Map(mapContainer.value, {
+        viewMode: '2D',
+        zoom: 12,
+        center: mockShops[0]?.location ?? [116.397428, 39.90923]
+      })
+
+      geocoder.value = new AMap.Geocoder()
+      mapReady.value = true
+    } catch (error) {
+      console.error('地图加载失败', error)
+      ElMessage.error('地图加载失败，请稍后重试')
+    } finally {
+      loadNearbyShops()
+    }
+  })()
+
+  await mapInitPromise
+  mapInitPromise = null
+}
+
+// 获取位置
+const getLocation = async () => {
+  locationLoading.value = true
+
+  try {
+    await initMap()
+
+    if (!amap.value) {
+      throw new Error('高德地图未加载')
+    }
+
+    const geolocation = new amap.value.Geolocation({
+      enableHighAccuracy: true,
+      timeout: 10000,
+      position: 'RB',
+      offset: [10, 20],
+      zoomToAccuracy: true,
+      showCircle: true,
+      showButton: false
+    })
+
+    geolocation.on('complete', handleLocationSuccess)
+    geolocation.on('error', handleLocationError)
+    geolocation.getCurrentPosition()
+  } catch (error) {
+    console.error('定位失败', error)
+    ElMessage.error('定位失败，请稍后重试')
+    locationLoading.value = false
+  }
 }
 
 // 查看商家详情
@@ -447,7 +707,7 @@ const handleCommand = (command: string) => {
 
 // 初始化
 onMounted(() => {
-  loadNearbyShops()
+  initMap()
 })
 </script>
 
@@ -529,6 +789,60 @@ onMounted(() => {
 
 .search-section {
   margin-bottom: 20px;
+}
+
+.map-card {
+  margin-bottom: 20px;
+}
+
+.map-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.map-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.map-card-location {
+  font-size: 14px;
+  color: #606266;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.map-wrapper {
+  height: 360px;
+  border-radius: 12px;
+  overflow: hidden;
+  background-color: #eef1f6;
+}
+
+.map-container {
+  width: 100%;
+  height: 100%;
+}
+
+:deep(.map-marker-label) {
+  background: rgba(64, 158, 255, 0.92);
+  color: #fff;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.35);
+}
+
+:deep(.map-marker-label--user) {
+  background: rgba(103, 194, 58, 0.95);
+  box-shadow: 0 2px 8px rgba(103, 194, 58, 0.35);
 }
 
 .location-info {
