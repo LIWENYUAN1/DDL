@@ -12,39 +12,39 @@
           description="还没有评价"
         />
         
-        <div 
-          v-for="review in reviews" 
+        <div
+          v-for="review in paginatedReviews"
           :key="review.id"
           class="review-item"
         >
           <div class="review-header">
             <div class="shop-info">
-              <h4>{{ review.shopName }}</h4>
-              <span class="service-name">{{ review.serviceName }}</span>
+              <h4>{{ review.merchantName || '未知商家' }}</h4>
+              <span class="service-name">{{ review.serviceItemName || '服务项目' }}</span>
             </div>
             <div class="review-meta">
-              <el-rate v-model="review.score" disabled show-score />
+              <el-rate :model-value="review.score" disabled show-score />
               <span class="review-date">{{ review.createTime }}</span>
             </div>
           </div>
-          
+
           <div class="review-content">
             <p>{{ review.content }}</p>
-            <div v-if="review.images && review.images.length > 0" class="review-images">
+            <div v-if="review.imgList && review.imgList.length > 0" class="review-images">
               <el-image
-                v-for="(img, index) in review.images"
+                v-for="(img, index) in review.imgList"
                 :key="index"
                 :src="img"
-                :preview-src-list="review.images"
+                :preview-src-list="review.imgList"
                 fit="cover"
                 class="review-image"
               />
             </div>
           </div>
-          
-          <div v-if="review.reply" class="shop-reply">
+
+          <div v-if="review.replyContent" class="shop-reply">
             <div class="reply-label">商家回复：</div>
-            <p>{{ review.reply }}</p>
+            <p>{{ review.replyContent }}</p>
             <span class="reply-time">{{ review.replyTime }}</span>
           </div>
         </div>
@@ -67,41 +67,63 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
+import { getUserReviews } from '@/api/review'
+import { mapReviewResponse, type ReviewItem } from '@/utils/review'
 
 // 状态
 const loading = ref(false)
-const reviews = ref<any[]>([])
+const reviews = ref<ReviewItem[]>([])
 const currentPage = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
 
 // 模拟数据
-const mockReviews = [
+const mockReviews: ReviewItem[] = [
   {
     id: 1,
-    shopName: '极速摩托维修店',
-    serviceName: '更换机油',
+    appointmentId: 1,
+    orderNo: 'APT20250120001',
+    serviceItemName: '更换机油',
+    merchantName: '极速摩托维修店',
+    userName: '匿名用户',
+    isAnonymous: true,
     score: 5,
+    serviceScore: 5,
+    qualityScore: 5,
+    attitudeScore: 5,
     content: '服务很专业，师傅很细心，价格也公道，下次还会来！',
-    images: [],
+    imgList: [],
     createTime: '2025-01-20 15:30',
-    reply: '感谢您的支持，期待您的下次光临！',
+    replyContent: '感谢您的支持，期待您的下次光临！',
     replyTime: '2025-01-20 18:00'
   },
   {
     id: 2,
-    shopName: '专业摩托保养中心',
-    serviceName: '定期保养套餐',
+    appointmentId: 2,
+    orderNo: 'APT20250118002',
+    serviceItemName: '定期保养套餐',
+    merchantName: '专业摩托保养中心',
+    userName: '陈先生',
+    isAnonymous: false,
     score: 4,
+    serviceScore: 4,
+    qualityScore: 4,
+    attitudeScore: 4,
     content: '整体还不错，就是等待时间有点长。',
-    images: [],
+    imgList: [],
     createTime: '2025-01-18 10:15',
-    reply: null,
-    replyTime: null
+    replyContent: '',
+    replyTime: ''
   }
 ]
+
+const paginatedReviews = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  const end = start + pageSize.value
+  return reviews.value.slice(start, end)
+})
 
 // 分页处理
 const handleSizeChange = (val: number) => {
@@ -118,18 +140,19 @@ const handleCurrentChange = (val: number) => {
 const loadReviews = async () => {
   loading.value = true
   try {
-    // const response = await reviewApi.getUserReviews({
-    //   page: currentPage.value,
-    //   pageSize: pageSize.value
-    // })
-    // reviews.value = response.data.records
-    // total.value = response.data.total
-    
-    // 模拟数据
+    const response = await getUserReviews()
+    if (response.code === 200) {
+      const list = Array.isArray(response.data) ? response.data : []
+      reviews.value = list.map((item: any) => mapReviewResponse(item))
+      total.value = reviews.value.length
+    } else {
+      throw new Error(response.msg || '获取评价失败')
+    }
+  } catch (error: any) {
+    console.error('加载评价失败：', error)
+    ElMessage.warning(error?.message || '加载失败，已展示示例数据')
     reviews.value = mockReviews
     total.value = mockReviews.length
-  } catch (error) {
-    ElMessage.error('加载失败')
   } finally {
     loading.value = false
   }

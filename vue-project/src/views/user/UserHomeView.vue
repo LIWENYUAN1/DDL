@@ -20,6 +20,11 @@
                 <el-dropdown-item command="profile">个人中心</el-dropdown-item>
                 <el-dropdown-item command="appointments">我的预约</el-dropdown-item>
                 <el-dropdown-item command="motorcycles">我的车辆</el-dropdown-item>
+                <el-dropdown-item command="collections">我的收藏</el-dropdown-item>
+                <el-dropdown-item command="messages">
+                  消息中心
+                  <span v-if="unreadCount" class="dropdown-count">({{ unreadCount }})</span>
+                </el-dropdown-item>
                 <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -53,6 +58,17 @@
             <el-icon><Star /></el-icon>
             <span>我的评价</span>
           </el-menu-item>
+          <el-menu-item index="collections">
+            <el-icon><Collection /></el-icon>
+            <span>我的收藏</span>
+          </el-menu-item>
+          <el-menu-item index="messages" class="messages-menu">
+            <el-icon><Bell /></el-icon>
+            <span class="menu-text">
+              消息中心
+              <span v-if="unreadCount" class="menu-count">({{ unreadCount }})</span>
+            </span>
+          </el-menu-item>
           <el-menu-item index="profile">
             <el-icon><User /></el-icon>
             <span>个人中心</span>
@@ -65,8 +81,8 @@
         <!-- 搜索和筛选 -->
         <div class="search-section" v-if="activeMenu === 'nearby'">
           <el-card shadow="never">
-            <el-row :gutter="20">
-              <el-col :span="12">
+            <el-row :gutter="20" class="search-row">
+              <el-col :span="10" :xs="24">
                 <el-input
                   v-model="searchQuery"
                   placeholder="搜索商家名称或服务项目"
@@ -75,7 +91,7 @@
                   @input="handleSearch"
                 />
               </el-col>
-              <el-col :span="6">
+              <el-col :span="5" :xs="24">
                 <el-select
                   v-model="filterType"
                   placeholder="服务类型"
@@ -90,10 +106,25 @@
                   <el-option label="美容清洗" value="5" />
                 </el-select>
               </el-col>
-              <el-col :span="6">
+              <el-col :span="5" :xs="24">
+                <el-select
+                  v-model="sortOption"
+                  placeholder="排序方式"
+                  @change="handleSortChange"
+                >
+                  <el-option label="按距离最近" value="distance" />
+                  <el-option label="按评分最高" value="rating" />
+                  <el-option label="按销量最多" value="sales" />
+                </el-select>
+              </el-col>
+              <el-col :span="4" :xs="24" class="search-actions">
                 <el-button type="primary" @click="getLocation" :loading="locationLoading">
                   <el-icon><Location /></el-icon>
                   {{ locationLoading ? '定位中...' : '获取位置' }}
+                </el-button>
+                <el-button type="info" plain @click="openMapOverview">
+                  <el-icon><Position /></el-icon>
+                  地图模式
                 </el-button>
               </el-col>
             </el-row>
@@ -137,32 +168,42 @@
                     <el-icon><Location /></el-icon>
                     <span>{{ shop.address }}</span>
                   </div>
-                  <div class="detail-item">
-                    <el-icon><Clock /></el-icon>
-                    <span>{{ shop.businessHours }}</span>
-                  </div>
-                  <div class="detail-item">
-                    <el-icon><Phone /></el-icon>
-                    <span>{{ shop.phone }}</span>
-                  </div>
-                  <div class="distance">距离：{{ shop.distance }}km</div>
-                </div>
-                <div class="shop-services">
-                  <el-tag 
-                    v-for="service in shop.services.slice(0, 3)" 
-                    :key="service"
-                    size="small"
-                    class="service-tag"
-                  >
-                    {{ service }}
-                  </el-tag>
-                </div>
-                <el-button type="primary" class="book-btn" @click.stop="bookService(shop)">
-                  立即预约
-                </el-button>
-              </el-card>
-            </el-col>
-          </el-row>
+              <div class="detail-item">
+                <el-icon><Clock /></el-icon>
+                <span>{{ shop.businessHours }}</span>
+              </div>
+              <div class="detail-item">
+                <el-icon><Phone /></el-icon>
+                <span>{{ shop.phone }}</span>
+              </div>
+              <div class="detail-item">
+                <el-icon><Sort /></el-icon>
+                <span>月销量：{{ shop.sales || 0 }} 单</span>
+              </div>
+              <div class="distance">距离：{{ shop.distance }}km</div>
+            </div>
+            <div class="shop-services">
+              <el-tag
+                v-for="service in shop.services.slice(0, 3)"
+                :key="service"
+                size="small"
+                class="service-tag"
+              >
+                {{ service }}
+              </el-tag>
+            </div>
+            <div class="shop-actions">
+              <el-button type="primary" class="book-btn" @click.stop="bookService(shop)">
+                立即预约
+              </el-button>
+              <el-button class="map-btn" plain @click.stop="viewShopOnMap(shop)">
+                <el-icon><Position /></el-icon>
+                地图
+              </el-button>
+            </div>
+          </el-card>
+        </el-col>
+      </el-row>
           
           <!-- 空状态 -->
           <el-empty 
@@ -179,6 +220,16 @@
 
         <!-- 我的评价 -->
         <UserReviews v-if="activeMenu === 'reviews'" />
+
+        <!-- 我的收藏 -->
+        <UserCollections
+          v-if="activeMenu === 'collections'"
+          @explore-shops="handleCollectionsExplore"
+          @view-shop="handleCollectionsViewShop"
+        />
+
+        <!-- 消息中心 -->
+        <UserMessageCenter v-if="activeMenu === 'messages'" />
 
         <!-- 个人中心 -->
         <UserProfile v-if="activeMenu === 'profile'" />
@@ -231,6 +282,24 @@
       </template>
     </el-dialog>
 
+    <el-dialog
+      v-model="showMapDialog"
+      :title="mapDialogTitle"
+      width="720px"
+      @close="mapShop = null"
+    >
+      <div v-if="mapIframeUrl" class="map-container">
+        <iframe
+          :src="mapIframeUrl"
+          class="map-frame"
+          frameborder="0"
+          allowfullscreen
+        />
+        <p class="map-tip">地图服务由高德地图提供，具体位置以商家实际为准。</p>
+      </div>
+      <el-empty v-else description="暂无可展示的位置信息" />
+    </el-dialog>
+
     <!-- 预约对话框 -->
     <BookingDialog
       v-model="showBookingDialog"
@@ -245,17 +314,21 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { 
-  Location, Calendar, User, Star, Odometer, Search, 
-  Clock, Phone, UserFilled, Tools 
+import {
+  Location, Calendar, User, Star, Odometer, Search,
+  Clock, Phone, UserFilled, Tools, Sort, Position, Collection, Bell
 } from '@element-plus/icons-vue'
 import UserAppointments from '@/components/user/UserAppointments.vue'
 import UserMotorcycles from '@/components/user/UserMotorcycles.vue'
 import UserReviews from '@/components/user/UserReviews.vue'
 import UserProfile from '@/components/user/UserProfile.vue'
 import BookingDialog from '@/components/user/BookingDialog.vue'
+import UserCollections from '@/components/user/UserCollections.vue'
+import UserMessageCenter from '@/components/user/UserMessageCenter.vue'
+import { useNotificationStore } from '@/store/modules/notification'
 
 const router = useRouter()
+const notificationStore = useNotificationStore()
 
 // 用户信息
 const userName = ref(localStorage.getItem('userInfo') ? JSON.parse(localStorage.getItem('userInfo')!).username : '用户')
@@ -263,10 +336,12 @@ const userAvatar = ref('')
 
 // 菜单状态
 const activeMenu = ref('nearby')
+const unreadCount = computed(() => notificationStore.unreadCount)
 
 // 搜索和筛选
 const searchQuery = ref('')
 const filterType = ref('')
+const sortOption = ref<'distance' | 'rating' | 'sales'>('distance')
 const currentLocation = ref('')
 const locationLoading = ref(false)
 
@@ -275,6 +350,8 @@ const loading = ref(false)
 const shops = ref<any[]>([])
 const selectedShop = ref<any>(null)
 const showShopDetail = ref(false)
+const showMapDialog = ref(false)
+const mapShop = ref<any | null>(null)
 
 // 预约对话框
 const showBookingDialog = ref(false)
@@ -283,6 +360,36 @@ const preSelectedServiceId = ref<number | undefined>(undefined)
 
 // 使用SVG作为默认Logo，避免外部图片加载失败
 const defaultLogo = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iODAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHJlY3Qgd2lkdGg9IjgwIiBoZWlnaHQ9IjgwIiBmaWxsPSIjZjVmNWY1Ii8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtc2l6ZT0iMTQiIGZpbGw9IiM5OTk5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj5Mb2dvPC90ZXh0Pjwvc3ZnPg=='
+
+const mapDialogTitle = computed(() => {
+  if (mapShop.value) {
+    return `${mapShop.value.name} - 地图位置`
+  }
+  return '附近商家地图'
+})
+
+const mapIframeUrl = computed(() => {
+  if (mapShop.value) {
+    if (!mapShop.value.longitude || !mapShop.value.latitude) {
+      return ''
+    }
+    return buildMapUrl(mapShop.value.longitude, mapShop.value.latitude, mapShop.value.name)
+  }
+
+  const available = shops.value.filter(shop => shop.longitude && shop.latitude)
+  if (!available.length) {
+    return ''
+  }
+
+  const markers = available
+    .map((shop: any) => `${shop.longitude},${shop.latitude}`)
+    .join('|')
+  const names = available
+    .map((shop: any) => encodeURIComponent(shop.name))
+    .join('|')
+
+  return `https://uri.amap.com/marker?markers=${markers}&names=${names}&zoom=13`
+})
 
 // 模拟商家数据（匹配数据库实际数据）
 // 注意：serviceItems 的 ID 必须与数据库 service_item 表中的 ID 一致
@@ -297,6 +404,9 @@ const mockShops = [
     rating: 4.5,
     reviewCount: 128,
     distance: 1.2,
+    sales: 320,
+    latitude: 25.6065,
+    longitude: 100.2676,
     services: ['机油保养', '刹车维修', '链条保养'],
     serviceItems: [
       { id: 3, name: '机油更换服务', price: 180, duration: 30 },
@@ -313,6 +423,9 @@ const mockShops = [
     rating: 4.8,
     reviewCount: 256,
     distance: 2.5,
+    sales: 450,
+    latitude: 39.915,
+    longitude: 116.404,
     services: ['基础保养', '刹车系统', '综合维护'],
     serviceItems: [
       { id: 1, name: '常规保养套餐', price: 200, duration: 60 },
@@ -323,7 +436,7 @@ const mockShops = [
 
 // 过滤后的商家列表
 const filteredShops = computed(() => {
-  let result = shops.value
+  let result = [...shops.value]
 
   // 按搜索关键词过滤
   if (searchQuery.value) {
@@ -339,12 +452,27 @@ const filteredShops = computed(() => {
     // result = result.filter(shop => shop.type === filterType.value)
   }
 
+  // 排序
+  if (sortOption.value === 'distance') {
+    result.sort((a, b) => (a.distance ?? Number.MAX_SAFE_INTEGER) - (b.distance ?? Number.MAX_SAFE_INTEGER))
+  } else if (sortOption.value === 'rating') {
+    result.sort((a, b) => (b.rating ?? 0) - (a.rating ?? 0))
+  } else if (sortOption.value === 'sales') {
+    result.sort((a, b) => (b.sales ?? 0) - (a.sales ?? 0))
+  }
+
   return result
 })
 
 // 菜单选择
 const handleMenuSelect = (index: string) => {
   activeMenu.value = index
+  if (index === 'nearby') {
+    ensureShopsLoaded()
+  }
+  if (index === 'messages') {
+    notificationStore.markAllAsRead()
+  }
 }
 
 // 搜索
@@ -357,10 +485,20 @@ const handleFilter = () => {
   // 筛选逻辑已在computed中实现
 }
 
+const handleSortChange = () => {
+  // 排序逻辑在computed中处理，这里保留方法以便后续扩展
+}
+
+const ensureShopsLoaded = () => {
+  if (!shops.value.length) {
+    loadNearbyShops()
+  }
+}
+
 // 获取位置
 const getLocation = () => {
   locationLoading.value = true
-  
+
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
       (position) => {
@@ -389,10 +527,22 @@ const getLocation = () => {
 // 加载附近商家
 const loadNearbyShops = (lat?: number, lng?: number) => {
   loading.value = true
-  
+
   // 模拟API调用
   setTimeout(() => {
-    shops.value = mockShops
+    let data = mockShops.map(shop => ({ ...shop }))
+
+    if (lat !== undefined && lng !== undefined) {
+      data = data.map(shop => {
+        if (shop.latitude && shop.longitude) {
+          const distance = calculateDistance(lat, lng, shop.latitude, shop.longitude)
+          return { ...shop, distance: Number(distance.toFixed(1)) }
+        }
+        return shop
+      })
+    }
+
+    shops.value = data
     loading.value = false
   }, 500)
 }
@@ -401,6 +551,15 @@ const loadNearbyShops = (lat?: number, lng?: number) => {
 const viewShopDetail = (shop: any) => {
   selectedShop.value = shop
   showShopDetail.value = true
+}
+
+const viewShopOnMap = (shop: any) => {
+  if (!shop?.longitude || !shop?.latitude) {
+    ElMessage.warning('该商家暂未提供地理位置')
+    return
+  }
+  mapShop.value = shop
+  showMapDialog.value = true
 }
 
 // 预约服务
@@ -423,8 +582,12 @@ const bookServiceItem = (shop: any, item: any) => {
 const handleBookingSuccess = (appointmentId: number) => {
   console.log('预约成功，ID：', appointmentId)
   ElMessage.success('预约成功！您可以在"我的预约"中查看详情')
-  // 可以选择刷新预约列表或跳转到预约详情
-  // activeMenu.value = 'appointments'
+  notificationStore.addNotification({
+    title: '预约已提交',
+    content: `预约单号 ${appointmentId} 已提交，等待商家确认。`,
+    type: 'appointment',
+    relatedId: appointmentId
+  })
 }
 
 // 用户菜单命令
@@ -441,8 +604,54 @@ const handleCommand = (command: string) => {
       router.push('/login')
     })
   } else {
+    if (command === 'nearby' || command === 'collections') {
+      ensureShopsLoaded()
+    }
+    if (command === 'messages') {
+      notificationStore.markAllAsRead()
+    }
     activeMenu.value = command
   }
+}
+
+const openMapOverview = () => {
+  ensureShopsLoaded()
+  mapShop.value = null
+  showMapDialog.value = true
+}
+
+const handleCollectionsViewShop = (payload: { id: number }) => {
+  ensureShopsLoaded()
+  const targetShop = shops.value.find(shop => shop.id === payload.id)
+  if (targetShop) {
+    viewShopDetail(targetShop)
+  } else {
+    ElMessage.info('该商家暂未出现在附近列表，已为您打开地图查看。')
+    mapShop.value = null
+    showMapDialog.value = true
+  }
+}
+
+const handleCollectionsExplore = () => {
+  activeMenu.value = 'nearby'
+  ensureShopsLoaded()
+}
+
+const buildMapUrl = (lng: number, lat: number, name: string) => {
+  const encodedName = encodeURIComponent(name || '商家位置')
+  return `https://uri.amap.com/marker?position=${lng},${lat}&name=${encodedName}&zoom=16`
+}
+
+const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+  const toRad = (value: number) => (value * Math.PI) / 180
+  const R = 6371 // km
+  const dLat = toRad(lat2 - lat1)
+  const dLng = toRad(lng2 - lng1)
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
 }
 
 // 初始化
@@ -496,6 +705,12 @@ onMounted(() => {
   transition: background-color 0.3s;
 }
 
+.dropdown-count {
+  margin-left: 6px;
+  color: #f56c6c;
+  font-size: 12px;
+}
+
 .user-dropdown:hover {
   background-color: rgba(255, 255, 255, 0.1);
 }
@@ -530,6 +745,17 @@ onMounted(() => {
 .search-section {
   margin-bottom: 20px;
 }
+
+.search-row {
+  align-items: center;
+}
+
+.search-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 
 .location-info {
   display: flex;
@@ -615,6 +841,44 @@ onMounted(() => {
   margin-top: 8px;
 }
 
+.shop-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.map-btn {
+  flex-shrink: 0;
+}
+
+.menu-text {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.menu-count {
+  color: #f56c6c;
+  font-size: 12px;
+}
+
+.map-container {
+  position: relative;
+  padding-bottom: 0;
+}
+
+.map-frame {
+  width: 100%;
+  height: 360px;
+  border: none;
+  border-radius: 8px;
+}
+
+.map-tip {
+  margin-top: 12px;
+  color: #909399;
+  font-size: 12px;
+}
+
 .shop-services {
   display: flex;
   gap: 8px;
@@ -627,7 +891,7 @@ onMounted(() => {
 }
 
 .book-btn {
-  width: 100%;
+  flex: 1;
 }
 
 .shop-detail-content {
@@ -658,9 +922,18 @@ onMounted(() => {
   .sidebar {
     display: none;
   }
-  
+
   .content {
     padding: 15px;
+  }
+
+  .search-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-actions .el-button {
+    width: 100%;
   }
 }
 </style>

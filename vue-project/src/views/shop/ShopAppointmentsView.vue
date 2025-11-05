@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Calendar, Clock, User, Star, StarFilled, Phone, Car, Check, Close, RefreshLeft, Search, Filter } from '@element-plus/icons-vue'
+import { Clock, Check, Close, RefreshLeft, StarFilled, Search, Filter } from '@element-plus/icons-vue'
 import { useAppointmentStore } from '@/store/modules/appointment'
 
 const appointmentStore = useAppointmentStore()
@@ -12,6 +12,9 @@ const statusFilter = ref('all')
 const loading = ref(false)
 const loadingText = ref('')
 const dateRange = ref<[Date | null, Date | null]>([null, null])
+const showDetailDrawer = ref(false)
+const selectedAppointment = ref<any | null>(null)
+const detailActionLoading = ref('')
 
 // 计算属性
 const shopAppointments = computed(() => {
@@ -52,11 +55,11 @@ const shopAppointments = computed(() => {
 })
 
 const statusConfig = {
-  pending: { text: '待确认', color: 'warning', icon: 'Clock' },
-  confirmed: { text: '已确认', color: 'primary', icon: 'Check' },
-  in_progress: { text: '进行中', color: 'info', icon: 'RefreshLeft' },
-  completed: { text: '已完成', color: 'success', icon: 'StarFilled' },
-  canceled: { text: '已取消', color: 'danger', icon: 'Close' }
+  pending: { text: '待确认', color: 'warning', icon: Clock },
+  confirmed: { text: '已确认', color: 'primary', icon: Check },
+  in_progress: { text: '进行中', color: 'info', icon: RefreshLeft },
+  completed: { text: '已完成', color: 'success', icon: StarFilled },
+  canceled: { text: '已取消', color: 'danger', icon: Close }
 }
 
 // 获取状态颜色
@@ -66,7 +69,7 @@ const getStatusColor = (status) => {
 
 // 获取状态图标
 const getStatusIcon = (status) => {
-  return statusConfig[status]?.icon || 'InfoFilled'
+  return statusConfig[status]?.icon || Clock
 }
 
 // 获取状态文本
@@ -82,6 +85,13 @@ const statusOptions = [
   { label: '已完成', value: 'completed' },
   { label: '已取消', value: 'canceled' }
 ]
+
+const detailActions = computed(() => {
+  if (!selectedAppointment.value) {
+    return []
+  }
+  return getAvailableActions(selectedAppointment.value.status)
+})
 
 // 生命周期
 onMounted(async () => {
@@ -101,12 +111,38 @@ const fetchShopAppointments = async () => {
   }
 }
 
+const handleViewDetail = (appointment: any) => {
+  selectedAppointment.value = appointment
+  showDetailDrawer.value = true
+}
+
+const handleDetailClose = () => {
+  showDetailDrawer.value = false
+  selectedAppointment.value = null
+  detailActionLoading.value = ''
+}
+
+watch(
+  () => appointmentStore.shopAppointments,
+  (appointments) => {
+    if (!selectedAppointment.value) {
+      return
+    }
+    const latest = appointments.find((item: any) => item.id === selectedAppointment.value?.id)
+    if (latest) {
+      selectedAppointment.value = latest
+    } else {
+      handleDetailClose()
+    }
+  }
+)
+
 // 更新预约状态
 const updateAppointmentStatus = async (appointmentId: string, newStatus: string) => {
   try {
     let confirmMessage = ''
     let confirmTitle = ''
-    
+
     switch (newStatus) {
       case 'confirmed':
         confirmTitle = '确认预约'
@@ -137,9 +173,15 @@ const updateAppointmentStatus = async (appointmentId: string, newStatus: string)
         }
       )
     }
-    
+
     loadingText.value = appointmentId
+    if (selectedAppointment.value?.id === appointmentId) {
+      detailActionLoading.value = newStatus
+    }
     await appointmentStore.updateAppointmentStatus(appointmentId, newStatus)
+    if (selectedAppointment.value?.id === appointmentId) {
+      selectedAppointment.value.status = newStatus
+    }
     ElMessage.success('操作成功')
   } catch (error) {
     if (error !== 'cancel') {
@@ -148,6 +190,7 @@ const updateAppointmentStatus = async (appointmentId: string, newStatus: string)
     }
   } finally {
     loadingText.value = ''
+    detailActionLoading.value = ''
   }
 }
 
@@ -211,16 +254,16 @@ const resetFilters = () => {
           <el-input
             v-model="searchQuery"
             placeholder="搜索用户姓名、电话、服务项目或预约单号"
-            prefix-icon="Search"
+            :prefix-icon="Search"
             clearable
           />
         </div>
-        
+
         <div class="filter-item">
           <el-select
             v-model="statusFilter"
             placeholder="选择状态"
-            prefix-icon="Filter"
+            :prefix-icon="Filter"
             clearable
           >
             <el-option
@@ -321,7 +364,7 @@ const resetFilters = () => {
           </template>
         </el-table-column>
         
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column label="操作" width="220" fixed="right">
           <template #default="scope">
             <div class="action-buttons">
               <el-button
@@ -329,16 +372,91 @@ const resetFilters = () => {
                 :key="action.value"
                 :type="action.type"
                 size="small"
-                @click="updateAppointmentStatus(scope.row.id, action.value)"
+                @click.stop="updateAppointmentStatus(scope.row.id, action.value)"
                 :loading="loadingText === scope.row.id"
               >
                 {{ action.text }}
+              </el-button>
+              <el-button
+                type="primary"
+                text
+                size="small"
+                @click.stop="handleViewDetail(scope.row)"
+              >
+                查看详情
               </el-button>
             </div>
           </template>
         </el-table-column>
       </el-table>
     </el-card>
+
+    <el-drawer
+      v-model="showDetailDrawer"
+      title="预约详情"
+      size="420px"
+      append-to-body
+      @close="handleDetailClose"
+    >
+      <div v-if="selectedAppointment" class="detail-content">
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="预约单号">
+            <el-tag size="small">{{ selectedAppointment.orderNo }}</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="预约状态">
+            <el-tag :type="getStatusColor(selectedAppointment.status)">
+              {{ getStatusText(selectedAppointment.status) }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="预约时间">
+            {{ formatDate(selectedAppointment.appointmentTime) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="服务项目">
+            {{ selectedAppointment.serviceName || '未知服务' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="服务金额">
+            ¥{{ Number(selectedAppointment.price || 0).toFixed(2) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="客户姓名">
+            {{ selectedAppointment.userName || '未知用户' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="联系方式">
+            {{ selectedAppointment.userPhone || '未提供电话' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="车辆信息" v-if="selectedAppointment.motorcycleModel || selectedAppointment.licensePlate">
+            <div class="vehicle-info">
+              <span v-if="selectedAppointment.motorcycleModel">车型：{{ selectedAppointment.motorcycleModel }}</span>
+              <span v-if="selectedAppointment.licensePlate">车牌：{{ selectedAppointment.licensePlate }}</span>
+            </div>
+          </el-descriptions-item>
+          <el-descriptions-item label="备注">
+            {{ selectedAppointment.remark || '无备注' }}
+          </el-descriptions-item>
+        </el-descriptions>
+
+        <div class="detail-actions">
+          <template v-if="detailActions.length">
+            <el-button
+              v-for="action in detailActions"
+              :key="action.value"
+              :type="action.type"
+              plain
+              :loading="detailActionLoading === action.value"
+              @click="updateAppointmentStatus(selectedAppointment.id, action.value)"
+            >
+              {{ action.text }}
+            </el-button>
+          </template>
+          <el-alert
+            v-else
+            title="暂无可执行操作"
+            type="info"
+            :closable="false"
+            show-icon
+          />
+        </div>
+      </div>
+    </el-drawer>
   </div>
 </template>
 
@@ -427,6 +545,30 @@ const resetFilters = () => {
 
 .empty-state {
   padding: 40px 0;
+}
+
+.detail-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.vehicle-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #606266;
+}
+
+.detail-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.detail-actions .el-button {
+  min-width: 96px;
 }
 
 /* 响应式设计 */
