@@ -7,7 +7,7 @@
 **错误信息**：
 ```
 Invalid bound statement (not found): 
-com.example.demo.mapper.AppointmentMapper.selectByUserId
+com.mountain.mapper.AppointmentMapper.selectByUserId
 ```
 
 **根本原因**：
@@ -26,7 +26,7 @@ com.example.demo.mapper.AppointmentMapper.selectByUserId
 
 #### ① `selectByUserId` - 用户查询自己的预约
 ```xml
-<select id="selectByUserId" resultType="com.example.demo.entity.Appointment">
+<select id="selectByUserId" resultType="com.mountain.entity.Appointment">
     SELECT 
         a.*,
         m.merchant_name as merchantName,
@@ -50,7 +50,7 @@ com.example.demo.mapper.AppointmentMapper.selectByUserId
 
 #### ② `selectByMerchantId` - 商家查询收到的预约
 ```xml
-<select id="selectByMerchantId" resultType="com.example.demo.entity.Appointment">
+<select id="selectByMerchantId" resultType="com.mountain.entity.Appointment">
     SELECT 
         a.*,
         u.username as userName,
@@ -227,7 +227,7 @@ http://localhost:5175
 ❌ **不应该再出现**：
 ```
 Invalid bound statement (not found): 
-com.example.demo.mapper.AppointmentMapper.selectByUserId
+com.mountain.mapper.AppointmentMapper.selectByUserId
 ```
 
 ---
@@ -298,7 +298,7 @@ demo/
 
 2. **XML 映射文件**（SQL实现）：
    ```xml
-   <mapper namespace="com.example.demo.mapper.AppointmentMapper">
+   <mapper namespace="com.mountain.mapper.AppointmentMapper">
        <select id="selectByUserId" ...>
            SELECT ... FROM appointment WHERE user_id = #{userId}
        </select>
