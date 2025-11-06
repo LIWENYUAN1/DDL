@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.demo.mapper.AppointmentReviewMapper">
+<mapper namespace="com.mountain.mapper.AppointmentReviewMapper">
 
     <!-- 根据用户ID查询评价列表 -->
-    <select id="selectByUserId" resultType="com.example.demo.entity.AppointmentReview">
+    <select id="selectByUserId" resultType="com.mountain.entity.AppointmentReview">
         SELECT
             ar.*,
             m.merchant_name as merchantName,
@@ -20,7 +20,7 @@
     </select>
 
     <!-- 根据商家ID查询评价列表 -->
-    <select id="selectByMerchantId" resultType="com.example.demo.entity.AppointmentReview">
+    <select id="selectByMerchantId" resultType="com.mountain.entity.AppointmentReview">
         SELECT
             ar.*,
             u.username as username,
@@ -38,7 +38,7 @@
     </select>
 
     <!-- 根据预约ID查询评价 -->
-    <select id="selectByAppointmentId" resultType="com.example.demo.entity.AppointmentReview">
+    <select id="selectByAppointmentId" resultType="com.mountain.entity.AppointmentReview">
         SELECT
             ar.*,
             u.username as username,

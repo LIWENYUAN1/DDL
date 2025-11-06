@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.example.demo.mapper.MotorcycleMapper">
+<mapper namespace="com.mountain.mapper.MotorcycleMapper">
 
     <!-- 根据车主ID查询车辆列表 -->
-    <select id="selectByOwnerId" resultType="com.example.demo.entity.Motorcycle">
+    <select id="selectByOwnerId" resultType="com.mountain.entity.Motorcycle">
         SELECT
             id,
             owner_id,
@@ -22,7 +22,7 @@
     </select>
 
     <!-- 根据车牌号查询车辆 -->
-    <select id="selectByLicensePlate" resultType="com.example.demo.entity.Motorcycle">
+    <select id="selectByLicensePlate" resultType="com.mountain.entity.Motorcycle">
         SELECT
             id,
             owner_id,

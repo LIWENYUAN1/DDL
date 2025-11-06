@@ -189,7 +189,7 @@ spring.autoconfigure.exclude=org.springframework.boot.autoconfigure.data.redis.R
 1. 点击IDEA顶部的运行配置下拉框
 2. 选择 **Edit Configurations...**
 3. 检查：
-   - **Main class**: `com.example.demo.DemoApplication`
+   - **Main class**: `com.mountain.DemoApplication`
    - **Working directory**: `F:\redame\demo`
    - **Use classpath of module**: `demo`
 
